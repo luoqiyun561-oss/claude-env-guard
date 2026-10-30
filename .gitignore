@@ -1,0 +1,8 @@
+# 构建产物：由 `python build.py` 重新生成，不入库。
+# 一个 10.9 MB 的 exe 每次构建都会变（时间戳、哈希），入库只会让 diff 变成噪声。
+build/
+dist/
+*.spec
+
+# 运行时生成：标识的中间产物由 tools/make_icon.py 再生。
+__pycache__/

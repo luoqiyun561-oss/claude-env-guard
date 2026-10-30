@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude 环境自检（浏览器版）</title>
+<style>
+  :root{
+    /* 取自 Claude 标识：珊瑚橙 #D97757、白 #F5F4EF、近黑底 #191917。
+       语义色（通过/注意/风险）刻意保留可分辨的绿黄红：它们承载状态而不是品牌，
+       也染成品牌橙会让「风险」和「装饰」长得一样。 */
+    --bg:#191917; --surface:#211f1e; --alt:#2b2926; --border:#3a3733;
+    --text:#f5f4ef; --dim:#a6a29a; --accent:#d97757; --accent-soft:#3a2a24;
+    --good:#4ea768; --warn:#d29922; --bad:#e0685e; --unknown:#6f6b63;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:14px/1.6 "Microsoft YaHei UI","PingFang SC",system-ui,-apple-system,sans-serif;
+    padding:28px 20px 48px;
+  }
+  .wrap{max-width:940px;margin:0 auto}
+  header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand svg{width:30px;height:30px;flex-shrink:0}
+  h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.2px}
+  .sub{color:var(--dim);font-size:12.5px;margin-top:6px;max-width:560px}
+  .score-box{text-align:right;flex-shrink:0}
+  #score{font-size:40px;font-weight:700;line-height:1;color:var(--dim)}
+  #verdict{font-size:12.5px;color:var(--dim);margin-top:6px}
+
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+  .factor{display:flex;align-items:center;gap:10px;padding:5px 0}
+  .factor .name{width:52px;color:var(--dim);font-size:12.5px}
+  .factor .bar{flex:1;height:8px;background:var(--alt);border-radius:4px;overflow:hidden}
+  .factor .fill{height:100%;width:0;border-radius:4px;transition:width .45s ease}
+  .factor .val{width:120px;text-align:right;color:var(--dim);font-size:12.5px;font-variant-numeric:tabular-nums}
+  .factor .val.on{color:var(--text)}
+
+  #status{margin:16px 0 12px;color:var(--dim);font-size:12.5px;min-height:20px}
+
+  .card{
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:13px 16px;margin-bottom:9px;
+  }
+  .card .top{display:flex;align-items:baseline;gap:10px}
+  .badge{font-size:12px;font-weight:700;width:44px;flex-shrink:0}
+  .card .title{font-size:13.5px;flex:1}
+  .card .weight{font-size:11.5px;color:var(--unknown)}
+  .card .detail{color:#cfcabf;font-size:12.5px;margin-top:5px}
+  .card .advice{color:#b3ada1;font-size:12.5px;margin-top:5px}
+  .card.is-unknown .title,.card.is-unknown .detail{color:var(--dim)}
+  .srctag{
+    font-size:11px;color:var(--accent);background:var(--accent-soft);
+    border-radius:4px;padding:1px 6px;margin-left:8px;vertical-align:middle;
+  }
+
+  footer{margin-top:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  button{
+    background:var(--alt);color:var(--text);border:0;border-radius:7px;
+    padding:8px 16px;font-size:12.5px;cursor:pointer;font-family:inherit;
+  }
+  button:hover{background:var(--border)}
+  button.primary{background:var(--accent);color:#1a1512;font-weight:700}
+  button.primary:hover{background:#e08a6b}
+  button:disabled{opacity:.5;cursor:default}
+  #note{color:var(--dim);font-size:12px;margin-left:auto;text-align:right;max-width:420px}
+
+  .callout{
+    border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;
+    padding:11px 14px;margin:16px 0;color:#d6d0c4;font-size:12.5px;
+  }
+  .callout b{color:var(--text)}
+  code{background:var(--alt);padding:1px 6px;border-radius:4px;font-size:12px}
+
+  .section-head{
+    font-size:14.5px;font-weight:700;margin:26px 0 12px;color:var(--text);
+  }
+
+  .manual-note{
+    color:#b9c3d6;font-size:12.5px;border-left:3px solid var(--warn);
+    background:#2a2417;border-radius:0 8px 8px 0;padding:10px 13px;margin-bottom:12px;
+  }
+  .manual-note b{color:var(--text)}
+  .mrow{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border)}
+  .mrow:last-child{border-bottom:0}
+  .mrow input[type=checkbox]{
+    width:16px;height:16px;margin-top:2px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;
+  }
+  .mrow .mtext{flex:1}
+  .mrow .mtitle{font-size:13px;color:var(--text)}
+  .mrow .mdesc{font-size:12px;color:var(--dim);margin-top:2px}
+  .manual-progress{
+    display:flex;align-items:center;gap:10px;margin-top:12px;
+    color:var(--dim);font-size:12.5px;
+  }
+  #manual-bar-wrap{
+    flex:1;height:6px;background:var(--alt);border-radius:3px;overflow:hidden;display:inline-block;
+  }
+  #manual-bar{display:block;height:100%;width:0;background:var(--accent);transition:width .3s ease}
+
+</style>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg stroke='%23d97757' stroke-width='8' stroke-linecap='round'%3E%3Cpath d='M50 10v22M50 68v22M10 50h22M68 50h22M22 22l15 15M63 63l15 15M78 22L63 37M37 63L22 78'/%3E%3C/g%3E%3C/svg%3E">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand">
+        <!-- 同一个标识的矢量版：与 assets/claude-env-guard.ico 是同一组 12 根射线。 -->
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <g stroke="#d97757" stroke-width="7.5" stroke-linecap="round">
+            <line x1="50" y1="8"  x2="50" y2="30"/>
+            <line x1="50" y1="70" x2="50" y2="92"/>
+            <line x1="8"  y1="50" x2="30" y2="50"/>
+            <line x1="70" y1="50" x2="92" y2="50"/>
+            <line x1="20.3" y1="20.3" x2="36.1" y2="36.1"/>
+            <line x1="63.9" y1="63.9" x2="79.7" y2="79.7"/>
+            <line x1="79.7" y1="20.3" x2="63.9" y2="36.1"/>
+            <line x1="36.1" y1="63.9" x2="20.3" y2="79.7"/>
+            <line x1="14.1" y1="34.3" x2="34.3" y2="41.4"/>
+            <line x1="65.7" y1="58.6" x2="85.9" y2="65.7"/>
+            <line x1="65.7" y1="41.4" x2="85.9" y2="34.3"/>
+            <line x1="34.3" y1="58.6" x2="14.1" y2="65.7"/>
+          </g>
+        </svg>
+        <h1>Claude 环境自检</h1>
+      </div>
+      <div class="sub">检测本机与浏览器两侧能被观测的事实。这台机器上的每一项都来自实际测量，测不到的会标「未检测」而不是猜。</div>
+    </div>
+    <div class="score-box">
+      <div id="score">—</div>
+      <div id="verdict"></div>
+    </div>
+  </header>
+
+  <div class="panel" id="factors"></div>
+
+  <div id="status">准备检测…</div>
+
+  <div id="results"></div>
+
+  <div id="system-half" style="display:none">
+    <div class="section-head">系统侧检查<span style="font-weight:400;color:var(--dim);font-size:12px">　由伴侣进程读取本机（TUN / 注册表 / DNS / 客户端）</span></div>
+    <div class="panel" id="sys-factors"></div>
+    <div id="sys-status" style="color:var(--dim);font-size:12.5px;margin:10px 0 12px"></div>
+    <div id="sys-results"></div>
+  </div>
+
+  <div class="section-head">自检列表<span style="font-weight:400;color:var(--dim);font-size:12px">　机器测不到、只有你自己知道的事</span></div>
+  <div class="panel" id="manual">
+    <div class="manual-note">
+      这些是<b>无法从本机观测</b>的事实，机器给不出判断，只能由你如实勾选。
+      每一项的依据就是你最初列的风控因素；勾选状态保存在本页（localStorage），不会上传。
+    </div>
+    <div id="manual-list"></div>
+    <div class="manual-progress">
+      已确认 <span id="manual-done">0</span>/<span id="manual-total">0</span>
+      <span id="manual-bar-wrap"><span id="manual-bar"></span></span>
+    </div>
+  </div>
+
+  <div class="callout" id="standalone-callout">
+    <b>浏览器版只看得到浏览器层面的事。</b>
+    TUN 是否接管默认路由、系统代理与环境变量是否一致、DNS 是否走 fake-IP、系统时钟偏差、
+    是否装了 Claude 桌面客户端——这些要本机才能读，用 <code>ClaudeEnvGuard.exe</code> 或
+    <code>ClaudeEnvGuard-web.exe --web</code> 查。
+    <br>
+    <b>它独有的强项：</b> WebRTC 泄漏。这是网页端真能看到的东西，exe 测不出来。
+  </div>
+
+  <footer>
+    <button class="primary" id="rescan">重新检测</button>
+    <button id="sys-refresh" style="display:none">重新扫描系统侧</button>
+    <button id="copy" disabled>复制文本</button>
+    <button id="export" disabled>导出 JSON</button>
+    <div id="note"></div>
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ *
+ * 权重：只在浏览器真的能测到的东西上分。测不到的项记 unknown，
+ * 不计入分母——否则断网会被算成"有风险"。
+ * ------------------------------------------------------------------ */
+const FACTORS = [
+  { id: "network", label: "网络" },
+  { id: "device",  label: "浏览器" },
+];
+
+/* Anthropic 公开的支持地区。只用来回答"这个出口国家到底有没有这项服务"，
+ * 不是信誉模型，也不是法律判断。 */
+const SUPPORTED = new Set(`
+US CA GB IE FR DE NL BE LU CH AT IT ES PT DK SE NO FI IS PL CZ SK HU RO BG
+GR HR SI EE LV LT UA MD RS BA MK AL ME CY MT AD MC LI
+AU NZ JP KR SG HK TW IN ID MY PH TH VN BN KH LA MM MN
+IL AE SA QA KW BH OM JO LB TR GE AM AZ KZ UZ KG TJ TM
+ZA NG KE GH EG MA TN DZ CI SN TZ UG RW ET MU BW NA ZM ZW MZ AO CM
+BR MX AR CL CO PE UY PY BO EC VE CR PA GT HN SV NI DO JM TT BB BS BZ GY SR
+PR GU VI AS MP
+`.trim().split(/\s+/));
+
+const CN_CODES = new Set(["CN", "HK", "MO"]);
+
+const COLOR = { good:"#4ea768", warn:"#d29922", bad:"#e0685e", unknown:"#6f6b63" };
+const LABEL = { good:"通过", warn:"注意", bad:"风险", unknown:"未检测" };
+const VERDICT = {
+  ok:      { text:"环境良好",   color:"#4ea768" },
+  caution: { text:"有可改进项", color:"#d29922" },
+  risky:   { text:"存在明显风险", color:"#e0685e" },
+};
+
+/* ------------------------------------------------------------------ *
+ * 工具
+ * ------------------------------------------------------------------ */
+function withTimeout(ms){
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(new Error("timeout")), ms);
+  return { signal: c.signal, done: () => clearTimeout(t) };
+}
+
+async function getJSON(url, ms = 9000){
+  const { signal, done } = withTimeout(ms);
+  try{
+    const r = await fetch(url, { signal, cache: "no-store", mode: "cors" });
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  } finally { done(); }
+}
+
+async function getText(url, ms = 9000){
+  const { signal, done } = withTimeout(ms);
+  try{
+    const r = await fetch(url, { signal, cache: "no-store", mode: "cors" });
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return (await r.text()).trim();
+  } finally { done(); }
+}
+
+/* 出口 IP 与归属：多个源依次尝试。单个服务挂掉不能把可测的事实变成不可测。 */
+async function lookupEgress(){
+  const errors = [];
+  for(const attempt of [
+    async () => {
+      const d = await getJSON("https://ipwho.is/");
+      if(!d || d.success === false) throw new Error("ipwho failed");
+      const c = d.connection || {};
+      return { source:"ipwho.is", ip:d.ip, country:d.country, code:d.country_code,
+               city:d.city, asn:c.asn == null ? null : String(c.asn),
+               org:c.isp || c.org || null, tz:(d.timezone||{}).id || null };
+    },
+    async () => {
+      const d = await getJSON("https://api.ipapi.is/");
+      if(!d.ip) throw new Error("ipapi empty");
+      /* 实测：这个服务的免费层不带 country_code 字段（返回 undefined）。
+       * 但 country 名字在，asn/company 也在；如果国家缺失，用 ipinfo 兜底补
+       * 国家码，而不是让整个地区判定退化成 unknown。 */
+      const result = { source:"api.ipapi.is", ip:d.ip, country:d.country,
+               code:d.country_code || null,
+               city:d.city, asn:d.asn, org:d.company, tz:d.timezone };
+      if(!result.code){
+        try{
+          const info = await getJSON("https://ipinfo.io/json", 6000);
+          if(info.country) result.code = info.country;
+          if(!result.country && info.country) result.country = info.country;
+          if(!result.asn && info.org) result.org = info.org;
+        }catch{}
+      }
+      return result;
+    },
+    async () => {
+      const d = await getJSON("https://ipinfo.io/json");
+      const org = d.org || "";
+      const m = /^AS(\d+)\s+(.*)$/.exec(org);
+      return { source:"ipinfo.io", ip:d.ip,
+               country:null, code:d.country || null,
+               city:d.city, asn:m ? m[1] : null, org:m ? m[2] : org, tz:d.timezone };
+    },
+  ]){
+    try { return await attempt(); }
+    catch(e){ errors.push(String(e.message || e)); }
+  }
+  return { error: "所有归属查询都失败：" + errors.join("; ") };
+}
+
+/* IPv6：能拿到公网 v6 就说明它和 v4 是两条独立的路。 */
+async function lookupIPv6(){
+  try{
+    const t = await getText("https://ipv6.icanhazip.com", 7000);
+    return /^[0-9a-f:]+$/i.test(t) && t.includes(":") ? t : null;
+  }catch{ return null; }
+}
+
+/* WebRTC：ICE candidate 里可能带真实 IP。
+ * 只看「公网」地址——内网 192.168.x.x 和 mDNS 的 .local 都是正常的，
+ * 真正的问题是它给出的公网 IP 和 HTTP 出口不是同一个（等于两个身份）。 */
+function lookupWebRTC(ms = 6000){
+  return new Promise(resolve => {
+    const found = new Set();
+    let pc;
+    const finish = () => {
+      try{ pc && pc.close(); }catch{}
+      resolve([...found]);
+    };
+    const timer = setTimeout(finish, ms);
+    try{
+      pc = new RTCPeerConnection({
+        iceServers:[{ urls:"stun:stun.l.google.com:19302" }, { urls:"stun:stun.cloudflare.com:3478" }],
+      });
+      pc.createDataChannel("probe");
+      pc.onicecandidate = ev => {
+        if(!ev.candidate){ clearTimeout(timer); finish(); return; }
+        const cand = ev.candidate.candidate || "";
+        const m = /([0-9]{1,3}(?:\.[0-9]{1,3}){3}|[0-9a-f]{1,4}(?::[0-9a-f]{0,4}){2,7})/i.exec(cand);
+        if(m) found.add(m[1]);
+      };
+      pc.createOffer().then(o => pc.setLocalDescription(o)).catch(finish);
+    }catch{ clearTimeout(timer); finish(); }
+  });
+}
+
+function isPublicIP(ip){
+  if(!ip) return false;
+  if(ip.includes(":")){
+    const low = ip.toLowerCase();
+    if(low === "::1") return false;
+    if(/^fe[89ab]/.test(low)) return false;
+    if(/^f[cd]/.test(low)) return false;
+    return true;
+  }
+  const p = ip.split(".").map(Number);
+  if(p[0] === 10 || p[0] === 127 || p[0] === 0) return false;
+  if(p[0] === 192 && p[1] === 168) return false;
+  if(p[0] === 172 && p[1] >= 16 && p[1] <= 31) return false;
+  if(p[0] === 169 && p[1] === 254) return false;
+  if(p[0] === 100 && p[1] >= 64 && p[1] <= 127) return false;
+  return true;
+}
+
+function offsetOfZone(tz){
+  if(!tz) return null;
+  try{
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hour12:false,
+      year:"numeric", month:"2-digit", day:"2-digit",
+      hour:"2-digit", minute:"2-digit", second:"2-digit",
+    });
+    const parts = {};
+    for(const p of dtf.formatToParts(new Date())) parts[p.type] = p.value;
+    const asUTC = Date.UTC(+parts.year, +parts.month - 1, +parts.day,
+                           +parts.hour % 24, +parts.minute, +parts.second);
+    return Math.round((asUTC - Date.now()) / 60000);
+  }catch{ return null; }
+}
+
+const fmtOffset = m => (m >= 0 ? "+" : "-") +
+  String(Math.floor(Math.abs(m) / 60)).padStart(2, "0") + ":" +
+  String(Math.abs(m) % 60).padStart(2, "0");
+
+/* ------------------------------------------------------------------ *
+ * 检查项
+ * ------------------------------------------------------------------ */
+function checkRegion(eg){
+  const base = { id:"region", title:"出口地区是否在支持范围内", factor:"network", weight:30 };
+  if(eg.error || !eg.code){
+    return { ...base, status:"unknown", detail: eg.error || "拿不到出口 IP 的国家信息",
+             advice:"确认代理连通后重试" };
+  }
+  const code = eg.code.toUpperCase();
+  if(SUPPORTED.has(code)){
+    return { ...base, status:"good", detail:`${eg.country || code}（${code}）在支持列表内` };
+  }
+  return { ...base, status:"bad",
+    detail: CN_CODES.has(code)
+      ? `出口在中国大陆/香港/澳门（${eg.country || code}），Claude 不在这些地区提供服务`
+      : `出口在 ${eg.country || code}（${code}），不在 Claude 的支持列表内`,
+    advice:"这不是「干净不干净」的问题，而是该地区根本没有这项服务。需要换成实际 Supported 地区的出口。" };
+}
+
+function checkIPType(eg){
+  const base = { id:"ip_type", title:"出口 IP 类型（住宅/移动 vs 机房）", factor:"network", weight:25 };
+  if(eg.error || (!eg.org && !eg.asn)){
+    return { ...base, status:"unknown", detail:"没有拿到 ASN / 组织名" };
+  }
+  const s = `${eg.org || ""} ${eg.asn || ""}`.toLowerCase();
+  const dc = ["hosting","cloud","datacenter","data center","server","vps","amazon","aws",
+              "google llc","microsoft","azure","digitalocean","linode","vultr","ovh",
+              "hetzner","contabo","oracle","alibaba","tencent cloud","cloudflare"];
+  const mobile = ["mobile","wireless","cellular","4g","5g","lte","unicom","cmcc","chinanet"];
+  if(dc.some(k => s.includes(k))){
+    return { ...base, status:"bad", detail:`看起来是机房/云厂商 ASN：${eg.org || eg.asn}`,
+             advice:"机房 IP 是最常见的扣分来源。换成住宅宽带或移动网络出口。" };
+  }
+  if(mobile.some(k => s.includes(k))){
+    return { ...base, status:"good", detail:`运营商网络：${eg.org || eg.asn}` };
+  }
+  return { ...base, status:"warn", detail:`既不像机房也不明确像住宅：${eg.org || eg.asn}`,
+           advice:"确认这条线路是目标国家的本地宽带，而不是小型 IDC 转售。" };
+}
+
+function checkWebRTC(ips, exitIP){
+  const base = { id:"webrtc", title:"WebRTC 是否泄漏真实 IP", factor:"network", weight:20 };
+  const pub = ips.filter(isPublicIP);
+  /* 一个候选都没有 = 测不到，不等于"安全"。
+   *
+   * STUN 在国内经常直接不可达（Google 的 3478 实测连不上），浏览器会静默
+   * 返回空列表。把"没数据"记成通过，等于用测不到冒充没问题 —— 所以这里
+   * 明确记 unknown，并且不计分。 */
+  if(!ips.length){
+    return { ...base, status:"unknown",
+      detail:"一个 ICE candidate 都没拿到（STUN 不可达或 WebRTC 被策略禁用），无法判断",
+      advice:"这项在浏览器里查不准，用 ClaudeEnvGuard.exe 或直接看浏览器设置确认。" };
+  }
+  if(!pub.length){
+    return { ...base, status:"good", detail:`只暴露内网/mDNS 地址（${ips.slice(0,3).join("、")}），这是正常现象，不构成泄漏` };
+  }
+  if(exitIP && pub.every(ip => ip === exitIP)){
+    return { ...base, status:"good", detail:`WebRTC 公网地址与出口 IP 一致（${pub[0]}）` };
+  }
+  return { ...base, status:"bad",
+    detail:`WebRTC 给出了与出口不同的公网地址：${pub.join("、")}（出口 ${exitIP || "未知"}）`,
+    advice:"这是真泄漏：同一个页面会看到两个来源。关掉浏览器的 WebRTC，或让代理接管 UDP。" };
+}
+
+function checkIPv6(v6, exitIP){
+  const base = { id:"ipv6", title:"是否存在 IPv6 旁路", factor:"network", weight:15 };
+  if(!v6){
+    return { ...base, status:"good", detail:"拿不到公网 IPv6，不存在 v6 旁路" };
+  }
+  return { ...base, status:"warn",
+    detail:`本机能通过 IPv6 出网：${v6}${exitIP ? `（v4 出口 ${exitIP}）` : ""}`,
+    advice:"如果代理没接管 v6，同一站点会看到两个不同来源，等于在跳 IP。确认 v6 也在隧道内，或在网卡上关掉 v6。" };
+}
+
+function checkTimezone(eg){
+  const base = { id:"tz_match", title:"浏览器时区与出口地区是否一致", factor:"network", weight:10 };
+  const localTZ = Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown";
+  const localOff = -new Date().getTimezoneOffset();
+  const egressOff = offsetOfZone(eg.tz);
+  if(egressOff == null){
+    return { ...base, status:"unknown", detail:`缺少出口时区（浏览器时区 ${localTZ}）` };
+  }
+  const gap = Math.abs(egressOff - localOff);
+  const detail = `浏览器 UTC${fmtOffset(localOff)}（${localTZ}） / 出口 UTC${fmtOffset(egressOff)}`;
+  if(gap <= 60) return { ...base, status:"good", detail };
+  if(gap <= 240){
+    return { ...base, status:"warn", detail: detail + `，相差 ${Math.round(gap/60)} 小时`,
+      advice:"时区本身不是封号理由；但和别的信号叠加时它是一致性破绽，能对上更稳。" };
+  }
+  return { ...base, status:"warn", detail: detail + `，相差 ${Math.round(gap/60)} 小时`,
+    advice:"差距这么大通常说明代理落地国家和你以为的不是同一个，先确认落地。" };
+}
+
+/* 时钟偏差在浏览器里测不到，所以这一项根本不参与打分。
+ *
+ * 实测原因：CORS 响应默认只暴露简单响应头，服务端没带
+ * Access-Control-Expose-Headers，于是 fetch 里 r.headers.get("date") 恒为 null
+ * （cloudflare trace 只给 content-type,expires；ipinfo / ipapi 不回服务器时间；
+ * worldtimeapi 在国内直接 fetch 失败）。留一个永远是"未检测"的项只会让报告
+ * 看起来像坏了。这项请用 ClaudeEnvGuard.exe 测。
+ */
+
+function checkLanguage(eg){
+  const base = { id:"language", title:"浏览器语言与出口地区", factor:"device", weight:5 };
+  const langs = navigator.languages || [navigator.language || ""];
+  const zh = langs.some(l => /^zh/i.test(l));
+  if(eg.error || !eg.code){
+    return { ...base, status:"unknown", detail:`浏览器语言 ${langs[0] || "未知"}` };
+  }
+  const english = ["US","GB","CA","AU","NZ","IE","SG"].includes(eg.code.toUpperCase());
+  if(english && zh){
+    return { ...base, status:"warn", detail:`浏览器首选 ${langs[0]}，出口在 ${eg.code}`,
+      advice:"语言和出口不一致是很弱的信号，不必为此改系统设置；知道它在就行。" };
+  }
+  return { ...base, status:"good", detail:`浏览器首选 ${langs[0] || "未知"}，出口 ${eg.code}` };
+}
+
+/* ------------------------------------------------------------------ *
+ * 汇总
+ * ------------------------------------------------------------------ */
+function score(checks){
+  const scored = checks.filter(c => c.status !== "unknown");
+  const total = scored.reduce((s, c) => s + c.weight, 0);
+  const earned = scored.reduce((s, c) => s + c.weight * (c.status === "good" ? 1 : c.status === "warn" ? .5 : 0), 0);
+  const perFactor = {};
+  for(const f of FACTORS){
+    const list = scored.filter(c => c.factor === f.id);
+    const t = list.reduce((s, c) => s + c.weight, 0);
+    const e = list.reduce((s, c) => s + c.weight * (c.status === "good" ? 1 : c.status === "warn" ? .5 : 0), 0);
+    perFactor[f.id] = { score: t ? e / t * 100 : 0, earned: Math.round(e), total: t };
+  }
+  return { score: total ? earned / total * 100 : 0, earned: Math.round(earned), total, perFactor };
+}
+
+function verdictOf(checks, s){
+  const bad = checks.filter(c => c.status === "bad").length;
+  if(bad >= 2 || s.score < 45) return "risky";
+  if(bad >= 1 || s.score < 75) return "caution";
+  return "ok";
+}
+
+/* ------------------------------------------------------------------ *
+ * 渲染
+ * ------------------------------------------------------------------ */
+const $ = id => document.getElementById(id);
+let current = null;
+
+function buildFactors(){
+  $("factors").innerHTML = FACTORS.map(f => `
+    <div class="factor">
+      <div class="name">${f.label}</div>
+      <div class="bar"><div class="fill" id="fill-${f.id}"></div></div>
+      <div class="val" id="val-${f.id}">—</div>
+    </div>`).join("");
+}
+
+function renderFactor(id, data){
+  const fill = $("fill-" + id), val = $("val-" + id);
+  if(!data || data.total === 0){ val.textContent = "无可用检查"; return; }
+  const pct = Math.max(0, Math.min(100, data.score));
+  fill.style.width = pct + "%";
+  fill.style.background = pct >= 80 ? COLOR.good : pct >= 55 ? COLOR.warn : COLOR.bad;
+  val.textContent = `${Math.round(data.score)}  (${data.earned}/${data.total})`;
+  val.classList.add("on");
+}
+
+function renderCard(c){
+  const el = document.createElement("div");
+  el.className = "card" + (c.status === "unknown" ? " is-unknown" : "");
+  el.innerHTML = `
+    <div class="top">
+      <span class="badge" style="color:${COLOR[c.status]}">${LABEL[c.status]}</span>
+      <span class="title">${escapeHTML(c.title)}</span>
+      <span class="weight">权重 ${c.weight}</span>
+    </div>
+    <div class="detail">${escapeHTML(c.detail)}</div>
+    ${c.advice ? `<div class="advice">→ ${escapeHTML(c.advice)}</div>` : ""}`;
+  return el;
+}
+
+function escapeHTML(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, ch =>
+    ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
+}
+
+function setStatus(text){ $("status").textContent = text; }
+
+/* ------------------------------------------------------------------ *
+ * 系统半区：伴侣进程（ClaudeEnvGuard-web.exe）提供 /api/system。
+ * 同源伺服，没有 CORS；不是这个入口打开的页面 fetch 会失败，
+ * 那就显示提示，而不假装测过了。
+ * ------------------------------------------------------------------ */
+let systemAvailable = null;   // null = 还没试过
+let systemData = null;
+
+async function fetchSystem(refresh){
+  const url = "/api/system" + (refresh ? "?refresh=1" : "");
+  const { signal, done } = withTimeout(2500);
+  try{
+    const r = await fetch(url, { signal, cache:"no-store" });
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  }catch{ return null; } finally { done(); }
+}
+
+/* 浏览器侧已经测过的 id 就不再用系统侧的重复项盖掉；反过来，浏览器测不到
+ * （unknown）而系统侧有数据的项，用系统侧补上。ipv6_leak/ipv6 是同一件事
+ * 在两边的名字，映射一下。 */
+const SYSTEM_DUP = { region:"region", ip_type:"ip_type", tz_match:"tz_match", ipv6_leak:"ipv6" };
+
+function mergeSystem(browserChecks, sysReport){
+  if(!sysReport || !Array.isArray(sysReport.checks)) return browserChecks;
+  const byId = Object.fromEntries(browserChecks.map(c => [c.id, c]));
+  const out = [...browserChecks];
+  for(const c of sysReport.checks){
+    const dupId = SYSTEM_DUP[c.id];
+    const mine = dupId ? byId[dupId] : byId[c.id];
+    if(mine && mine.status !== "unknown") continue;
+    out.push({ ...c, src:"system" });
+  }
+  return out;
+}
+
+async function loadSystem({ refresh = false } = {}){
+  let d = await fetchSystem(refresh);
+  if(d === null){ systemAvailable = false; return null; }
+  systemAvailable = true;
+  const deadline = Date.now() + 60000;
+  while(d && !d.ready && Date.now() < deadline){
+    setSysStatus("系统级检测进行中…");
+    await new Promise(r => setTimeout(r, 1200));
+    d = await fetchSystem(false);
+  }
+  if(!d){ systemAvailable = false; return null; }
+  if(d.error){ setSysStatus("系统级检测失败：" + d.error); return null; }
+  if(!d.ready){ setSysStatus("系统级检测超时，稍后可点「重新扫描系统侧」重试"); return null; }
+  systemData = d.report;
+  return systemData;
+}
+
+function setSysStatus(text){ $("sys-status").textContent = text; }
+
+function renderSystem(){
+  const has = systemAvailable === true && systemData;
+  $("system-half").style.display = has ? "" : "none";
+  $("sys-refresh").style.display = systemAvailable === true ? "" : "none";
+  if(!has){
+    if(systemAvailable === false && $("standalone-callout")){
+      $("standalone-callout").style.display = "";
+    }
+    return;
+  }
+  $("standalone-callout").style.display = "none";
+  /* 系统面板显示系统侧的「全部」检查项，不做去重——去重只发生在总分里。
+   * 上一版在这里调 mergeSystem([])，把与浏览器同名的项跳掉了，结果
+   * 「出口地区」在总视图里是未检测、在系统面板里又不存在，两边都看不到。 */
+  const list = systemData.checks.map(c => ({ ...c, src:"system" }));
+  const s = score(list);
+  const order = { bad:0, warn:1, unknown:2, good:3 };
+  const box = $("sys-results");
+  box.innerHTML = "";
+  for(const c of [...list].sort((a,b) => order[a.status] - order[b.status])) box.appendChild(renderCard(c));
+  setSysStatus(`系统侧完成　${s.earned}/${s.total} 分权重`);
+}
+
+/* ------------------------------------------------------------------ *
+ * 自检列表：机器测不到、只有用户自己知道的事。
+ * 勾选状态只存本页 localStorage，不上传、不参与检测分——检测分只能由
+ * 测量得出，把自报混进分数会让它看起来像测量结果。
+ * ------------------------------------------------------------------ */
+const SELF_CHECK = [
+  { group:"注册", items:[
+    { id:"reg_email",     text:"注册邮箱不是 Gmail",              desc:"有更高权重的邮箱服务时优先用它" },
+    { id:"reg_no_kyc",    text:"注册时没有弹 KYC",                desc:"注册即 KYC 的号建议直接弃用" },
+    { id:"reg_mobile",    text:"用手机 App 完成过注册",           desc:"手机 App 注册会加分" },
+  ]},
+  { group:"支付", items:[
+    { id:"pay_delay",     text:"不是刚注册就订阅",                desc:"刚注册就订阅会扣分" },
+    { id:"pay_pro_first", text:"先订 Pro 用了两天，再考虑 Max",    desc:"直接上 Max 大幅扣分" },
+    { id:"pay_no_kyc",    text:"支付时没有弹 KYC",                desc:"弹了说明账号还在考察期" },
+    { id:"pay_real_card", text:"用国外实体银行卡或 Google Play 支付", desc:"虚拟卡扣分" },
+  ]},
+  { group:"使用", items:[
+    { id:"use_not_maxed", text:"没有一次把限额用完",              desc:"宁可两个号轮换，也不要一个号撸到底" },
+    { id:"use_desktop",   text:"主要用 Desktop 客户端",           desc:"比网页端略加分" },
+    { id:"use_mobile",    text:"手机端也有使用",                  desc:"少量加分" },
+    { id:"use_memory",    text:"记忆功能已开启、记忆文件在积累",  desc:"记忆越多分越高" },
+    { id:"use_no_fable",  text:"没有大量使用 Fable",              desc:"大量使用会扣分" },
+  ]},
+  { group:"IP 与设备", items:[
+    { id:"ip_stable",     text:"出口 IP 长期稳定，没有跳变",      desc:"稳定性是关键" },
+    { id:"ip_global_tun", text:"代理是全局模式且开了 TUN",        desc:"跳 IP、泄漏都是大扣分项" },
+    { id:"dev_single",    text:"没有多设备同时登录",              desc:"理想状态是一台电脑一个客户端" },
+    { id:"dev_calm",      text:"没有频繁换 IP、频繁登录、高并发", desc:"这些都会大幅扣分" },
+  ]},
+  { group:"账号年龄", items:[
+    { id:"age_old",       text:"账号是 2023 年或更早注册的",      desc:"老号容错空间大得多；分数随时间增长但很慢" },
+  ]},
+];
+const LS_KEY = "ceg.selfcheck.v1";
+
+function loadTicked(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEY)) || {}; }
+  catch{ return {}; }
+}
+function saveTicked(map){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(map)); }catch{}
+}
+function tickedCount(map){
+  return SELF_CHECK.reduce((n, g) => n + g.items.filter(it => map[it.id]).length, 0);
+}
+function selfCheckTotal(){
+  return SELF_CHECK.reduce((n, g) => n + g.items.length, 0);
+}
+
+function renderSelfCheck(){
+  const map = loadTicked();
+  const box = $("manual-list");
+  box.innerHTML = "";
+  for(const group of SELF_CHECK){
+    const head = document.createElement("div");
+    head.className = "mgroup";
+    head.textContent = group.group;
+    box.appendChild(head);
+    for(const item of group.items){
+      const row = document.createElement("label");
+      row.className = "mrow" + (map[item.id] ? " done" : "");
+      row.innerHTML = `
+        <input type="checkbox" ${map[item.id] ? "checked" : ""}>
+        <span class="mtext">
+          <span class="mtitle">${escapeHTML(item.text)}</span>
+          <span class="mdesc">${escapeHTML(item.desc)}</span>
+        </span>`;
+      row.querySelector("input").addEventListener("change", ev => {
+        const m = loadTicked();
+        if(ev.target.checked) m[item.id] = true; else delete m[item.id];
+        saveTicked(m);
+        row.classList.toggle("done", ev.target.checked);
+        updateManualProgress();
+      });
+      box.appendChild(row);
+    }
+  }
+  updateManualProgress();
+}
+
+function updateManualProgress(){
+  const map = loadTicked();
+  const done = tickedCount(map), total = selfCheckTotal();
+  $("manual-done").textContent = done;
+  $("manual-total").textContent = total;
+  $("manual-bar").style.width = (total ? done / total * 100 : 0) + "%";
+}
+
+/* ------------------------------------------------------------------ *
+ * 主流程
+ * ------------------------------------------------------------------ */
+async function scan(){
+  const btn = $("rescan");
+  btn.disabled = true;
+  $("copy").disabled = true;
+  $("export").disabled = true;
+  $("results").innerHTML = "";
+  for(const f of FACTORS){
+    $("fill-" + f.id).style.width = "0";
+    const v = $("val-" + f.id);
+    v.textContent = "—"; v.classList.remove("on");
+  }
+  $("score").textContent = "—";
+  $("score").style.color = "var(--dim)";
+  $("verdict").textContent = "";
+
+  const checks = [];
+
+  setStatus("查询出口 IP 与归属…");
+  const eg = await lookupEgress();
+
+  setStatus("检测 WebRTC 泄漏…");
+  const webrtc = await lookupWebRTC();
+
+  setStatus("检测 IPv6 旁路…");
+  const v6 = await lookupIPv6();
+
+  checks.push(
+    checkRegion(eg),
+    checkIPType(eg),
+    checkWebRTC(webrtc, eg.ip),
+    checkIPv6(v6, eg.ip),
+    checkTimezone(eg),
+    checkLanguage(eg),
+  );
+
+  // 系统半区：有伴侣进程就合并进来；没有就显示提示，浏览器侧照常出分。
+  const sys = await loadSystem({ refresh:false });
+  const all = mergeSystem(checks, sys);
+
+  const s = score(all);
+  const verdict = verdictOf(all, s);
+
+  $("score").textContent = Math.round(s.score);
+  $("score").style.color = VERDICT[verdict].color;
+  $("verdict").textContent = `${VERDICT[verdict].text}　${s.earned}/${s.total} 分权重`;
+  $("verdict").style.color = VERDICT[verdict].color;
+
+  for(const f of FACTORS) renderFactor(f.id, s.perFactor[f.id]);
+
+  const order = { bad:0, warn:1, unknown:2, good:3 };
+  const box = $("results");
+  box.innerHTML = "";
+  for(const c of [...checks].sort((a,b) => order[a.status] - order[b.status])) box.appendChild(renderCard(c));
+  renderSystem();
+
+  const unreachable = eg.error ? "出口查询失败，可能是代理不通或网络被拦。" : "";
+  setStatus(`完成于 ${new Date().toLocaleString("zh-CN", { hour12:false })}${unreachable ? "　" + unreachable : ""}`);
+
+  current = { when:new Date().toISOString(), verdict, score:s.score, earned:s.earned,
+              total:s.total, checks:all, egress:eg, webrtc, ipv6:v6,
+              selfCheck:loadTicked() };
+
+  btn.disabled = false;
+  $("copy").disabled = false;
+  $("export").disabled = false;
+}
+
+async function rescanSystem(){
+  if(systemAvailable !== true) return;
+  $("sys-refresh").disabled = true;
+  await fetchSystem(true);
+  const sys = await loadSystem({ refresh:false });
+  if(sys){
+    // 合并后的完整列表 = 浏览器原始检查 + 系统检查；浏览器结果保留在 current 里。
+    const browserOnly = current.checks.filter(c => c.src !== "system");
+    const all = mergeSystem(browserOnly, sys);
+    const s = score(all);
+    const verdict = verdictOf(all, s);
+    current.checks = all; current.score = s.score; current.earned = s.earned; current.total = s.total;
+    current.verdict = verdict;
+    $("score").textContent = Math.round(s.score);
+    $("score").style.color = VERDICT[verdict].color;
+    $("verdict").textContent = `${VERDICT[verdict].text}　${s.earned}/${s.total} 分权重`;
+    $("verdict").style.color = VERDICT[verdict].color;
+    for(const f of FACTORS) renderFactor(f.id, s.perFactor[f.id]);
+    renderSystem();
+  }
+  $("sys-refresh").disabled = false;
+}
+
+function asText(){
+  if(!current) return "";
+  const lines = [
+    `Claude 环境自检（浏览器版）　${current.when}`,
+    `总分 ${Math.round(current.score)}/100（${current.earned}/${current.total} 分权重）`,
+    "",
+  ];
+  for(const c of current.checks){
+    lines.push(`[${LABEL[c.status]}] ${c.title}（权重 ${c.weight}）`);
+    lines.push(`    ${c.detail}`);
+    if(c.advice) lines.push(`    → ${c.advice}`);
+  }
+  const map = loadTicked();
+  const done = tickedCount(map), total = selfCheckTotal();
+  lines.push("", `自检列表：已确认 ${done}/${total}`);
+  for(const g of SELF_CHECK){
+    for(const it of g.items){
+      lines.push(`  [${map[it.id] ? "x" : " "}] ${g.group}｜${it.text}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+$("rescan").addEventListener("click", scan);
+$("sys-refresh").addEventListener("click", rescanSystem);
+$("copy").addEventListener("click", async () => {
+  try{
+    await navigator.clipboard.writeText(asText());
+    $("note").textContent = "已复制到剪贴板";
+  }catch{
+    $("note").textContent = "复制失败，请手动选择文本";
+  }
+});
+$("export").addEventListener("click", () => {
+  if(!current) return;
+  const payload = { ...current, selfCheck: loadTicked() };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "claude-env-browser-report.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+});
+
+buildFactors();
+renderSelfCheck();
+scan();
+</script>
+</body>
+</html>
